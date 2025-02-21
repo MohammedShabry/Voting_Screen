@@ -109,7 +109,7 @@ export default function HomeScreen() {
           <Text style={styles.buttonText}>Clear</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.button, styles.voteButton]} onPress={captureDrawing}>
-          <Text style={styles.buttonText}>Predict</Text>
+          <Text style={styles.buttonText}>Vote</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
