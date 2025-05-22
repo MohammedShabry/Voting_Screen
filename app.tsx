@@ -1,4 +1,4 @@
-import { StyleSheet, View, SafeAreaView, AppRegistry, TouchableOpacity, Text } from "react-native"
+import { StyleSheet, View, SafeAreaView, AppRegistry, TouchableOpacity, Text, Alert } from "react-native"
 import { useState, useRef } from "react"
 import Svg, { Path } from "react-native-svg"
 import { captureRef } from "react-native-view-shot"
@@ -9,8 +9,10 @@ export default function HomeScreen() {
   const [currentPath, setCurrentPath] = useState("")
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [predictedDigits, setPredictedDigits] = useState<string[]>([])
+  const [predictions, setPredictions] = useState<{ id: string; number: string; name: string }[]>([])
   const svgRef = useRef(null)
   const canvasRef = useRef(null)
+  const MAX_VOTES = 3
 
   const handleTouchMove = (event: { nativeEvent: { locationX: any; locationY: any } }) => {
     const { locationX, locationY } = event.nativeEvent
@@ -27,13 +29,26 @@ export default function HomeScreen() {
     setCurrentPath("")
   }
 
-  const clearCanvas = () => {
+  const clearCanvas = (clearPredictions = true) => {
     setPaths([])
     setCurrentPath("")
-    setPredictedDigits([])
+    if (clearPredictions) {
+      setPredictedDigits([])
+    }
+  }
+
+  const handleClearCanvas = () => {
+    clearCanvas(false)
+    setPredictions([]) // Clear the predictions array
   }
 
   const captureDrawing = async () => {
+    if (predictions.length >= MAX_VOTES) {
+      Alert.alert("Limit Reached", "3 candidates selected")
+      console.log("Selected candidates:", predictions) // Display the selected candidates in the console
+      return
+    }
+
     try {
       const uri = await captureRef(canvasRef, {
         format: "png",
@@ -49,7 +64,7 @@ export default function HomeScreen() {
       })
 
       // Send the captured image to the backend
-      const response = await axios.post("http://172.20.10.5:3000/api/number_prediction/predict", formData, {
+      const response = await axios.post("http://172.28.11.18:3000/api/number_prediction/predict", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -57,14 +72,16 @@ export default function HomeScreen() {
       console.log("Image uploaded successfully")
       console.log("Response from backend:", response.data)
 
-      // Extract the predicted number and candidate name from the response
+      // Extract the predicted number, candidate name, and ID from the response
       if (response.data) {
-        const { predictedNumber, candidateName } = response.data
+        const { predictedNumber, candidateName, condidateId } = response.data
         if (candidateName) {
           setPredictedDigits([`${predictedNumber} - ${candidateName}`])
+          setPredictions((prev) => [...prev, { id:condidateId, number: predictedNumber, name: candidateName }])
         } else {
           setPredictedDigits([`${predictedNumber} - Not Found`])
         }
+        clearCanvas(false) // Clear the canvas but not the predicted digits
       } else {
         setPredictedDigits([])
       }
@@ -76,6 +93,9 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TouchableOpacity style={styles.resetButton} onPress={() => clearCanvas(true)}>
+        <Text style={styles.resetButtonText}>Reset</Text>
+      </TouchableOpacity>
       <View
         ref={canvasRef}
         style={styles.canvas}
@@ -104,8 +124,20 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
+      {predictions.length > 0 && (
+        <View style={styles.predictionContainer}>
+          <Text style={styles.predictionTitle}>Predictions:</Text>
+          <View style={styles.digitsContainer}>
+            {predictions.map((prediction, index) => (
+              <View key={index} style={styles.digitBox}>
+                <Text style={styles.digitText}>{`${prediction.number} - ${prediction.name} (ID: ${prediction.id})`}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={[styles.button, styles.clearButton]} onPress={clearCanvas}>
+        <TouchableOpacity style={[styles.button, styles.clearButton]} onPress={handleClearCanvas}>
           <Text style={styles.buttonText}>Clear</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.button, styles.voteButton]} onPress={captureDrawing}>
@@ -184,6 +216,20 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  resetButton: {
+    
+    position: "absolute",
+    top: 60,
+    left: 10,
+    backgroundColor: "red",
+    padding: 10,
+    borderRadius: 5,
+    zIndex: 1,
+  },
+  resetButtonText: {
+    color: "white",
+    fontWeight: "bold",
   },
 })
 
